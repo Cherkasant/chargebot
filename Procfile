@@ -1,0 +1,1 @@
+worker: python src/chargebot/bot.py
