@@ -26,7 +26,8 @@ def health_detailed():
         'bot_token': 'SET' if os.getenv('TELEGRAM_BOT_TOKEN') else 'NOT SET',
         'database': 'SET' if os.getenv('DATABASE_URL') else 'NOT SET',
         'uptime_seconds': round(uptime, 1),
-        'last_updated': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+        'last_updated': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime()),
+        'bot_running': bot_status == 'running'
     }
 
 def run_healthcheck():
@@ -74,32 +75,56 @@ try:
     print("Bot module imported successfully")
     print("Starting bot...")
 
-    if __name__ == "__main__":
+    async def main():
         print(f"Bot startup took {time.time() - start_time:.2f} seconds")
 
-        # Run bot with timeout
-        async def run_with_timeout():
+        # Run bot as background task
+        async def run_bot_task():
             try:
-                await asyncio.wait_for(run_bot(), timeout=30.0)
-                bot_status = "running"
-            except asyncio.TimeoutError:
-                print("Bot startup timed out after 30 seconds")
-                bot_status = "timeout"
-                raise
+                await run_bot()
             except Exception as e:
-                print(f"Error during bot startup: {e}")
+                print(f"Error in bot task: {e}")
+                nonlocal bot_status
                 bot_status = "error"
                 raise
 
-        asyncio.run(run_with_timeout())
+        # Create bot task
+        bot_task = asyncio.create_task(run_bot_task())
+
+        # Update status once bot starts successfully
+        await asyncio.sleep(2)  # Give bot time to initialize
+        if not bot_task.done():
+            bot_status = "running"
+            print("Bot is running in background")
+
+        # Keep the main process alive indefinitely
+        try:
+            while True:
+                await asyncio.sleep(60)  # Check every minute
+                if bot_task.done():
+                    print("Bot task completed unexpectedly")
+                    break
+        except KeyboardInterrupt:
+            print("Received shutdown signal")
+        finally:
+            print("Shutting down bot...")
+            bot_task.cancel()
+            try:
+                await bot_task
+            except asyncio.CancelledError:
+                pass
+            print("Bot shutdown complete")
+
+    if __name__ == "__main__":
+        asyncio.run(main())
 except Exception as e:
     print(f"Error starting bot: {e}")
     import traceback
     traceback.print_exc()
     print(f"Failed after {time.time() - start_time:.2f} seconds")
     bot_status = "failed"
-    # Don't exit immediately, keep healthcheck server running for debugging
-    print("Healthcheck server still running for debugging...")
+    # Keep healthcheck server running indefinitely for Railway deployment
+    print("Healthcheck server running indefinitely for Railway deployment...")
     try:
         while True:
             time.sleep(60)  # Keep alive for monitoring
