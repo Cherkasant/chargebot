@@ -9,11 +9,11 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src ./src
+COPY start_bot.py ./
 
 # Data directory for SQLite
 RUN mkdir -p /app/data
-VOLUME ["/app/data"]
 
-CMD ["python", "-m", "src.chargebot.main"]
+CMD ["python", "start_bot.py"]
 
 
