@@ -325,9 +325,11 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     try:
         # Fetch from multiple providers
         all_items = []
+        print(f"🔍 Fetching stations from providers (lat={lat:.4f}, lon={lon:.4f}, radius={settings.default_search_radius_km}km)...")
 
         # OpenChargeMap
         try:
+            print("🌐 Fetching from OpenChargeMap...")
             ocm_items = await ocm_fetch_nearby(
                 lat=lat,
                 lon=lon,
@@ -336,11 +338,13 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 api_key=settings.openchargemap_api_key,
             )
             all_items.extend(ocm_items)
+            print(f"✅ OpenChargeMap: {len(ocm_items)} stations")
         except Exception as e:
-            print(f"OCM error: {e}")
+            print(f"❌ OpenChargeMap error: {e}")
 
         # PlugShare
         try:
+            print("🔌 Fetching from PlugShare...")
             ps_items = await ps_fetch_nearby(
                 lat=lat,
                 lon=lon,
@@ -349,11 +353,13 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 api_key=settings.plugshare_api_key,
             )
             all_items.extend(ps_items)
+            print(f"✅ PlugShare: {len(ps_items)} stations")
         except Exception as e:
-            print(f"PlugShare error: {e}")
+            print(f"❌ PlugShare error: {e}")
 
         # Belarusian networks (no API key needed)
         try:
+            print("🇧🇾 Fetching from Belarusian networks...")
             by_items = await by_fetch_nearby(
                 lat=lat,
                 lon=lon,
@@ -362,8 +368,11 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
                 api_key=None,
             )
             all_items.extend(by_items)
+            print(f"✅ Belarus networks: {len(by_items)} stations")
         except Exception as e:
-            print(f"Belarus networks error: {e}")
+            print(f"❌ Belarus networks error: {e}")
+
+        print(f"📊 Total raw stations fetched: {len(all_items)}")
 
         if not all_items:
             await update.effective_message.reply_text("Рядом ничего не найдено. Попробуйте увеличить радиус поиска или проверьте координаты.")
@@ -450,14 +459,20 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def create_application() -> Application:
+    print("🔧 Loading settings...")
     settings = load_settings()
+    print("✅ Settings loaded successfully")
+
     # Initialize DB (sqlite only) if path points to sqlite
     if settings.db_url.startswith("sqlite///") or settings.db_url.startswith("sqlite:///"):
+        print("🗄️  Initializing database...")
         try:
             init_db(settings.db_url)
-        except Exception:
-            pass
+            print("✅ Database initialized successfully")
+        except Exception as e:
+            print(f"⚠️  Database initialization failed (non-critical): {e}")
 
+    print("🤖 Creating Telegram application...")
     app = (
         Application.builder()
         .token(settings.telegram_token)
@@ -465,28 +480,56 @@ async def create_application() -> Application:
         .build()
     )
     app.bot_data["settings"] = settings
+    print("✅ Telegram application created")
 
+    print("📡 Adding handlers...")
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("test_minsk", cmd_test_minsk))
     app.add_handler(CommandHandler("add_station", cmd_add_station))
     app.add_handler(MessageHandler(filters.LOCATION, on_location))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
+    print("✅ Handlers added")
 
     return app
 
 
 async def run_bot() -> None:
+    print("🚀 Starting bot application...")
     app = await create_application()
+    print("🔄 Initializing application...")
     await app.initialize()
+    print("▶️  Starting application...")
     await app.start()
+    print("✅ Bot started successfully!")
+
+    # Test connection before full startup
+    print("🔗 Testing Telegram connection...")
     try:
+        # Test bot connection with timeout
+        await asyncio.wait_for(app.bot.get_me(), timeout=10.0)
+        print("✅ Telegram connection test passed")
+    except asyncio.TimeoutError:
+        print("❌ Telegram connection test timed out")
+        raise Exception("Failed to connect to Telegram API")
+    except Exception as e:
+        print(f"❌ Telegram connection test failed: {e}")
+        raise
+
+    try:
+        print("📡 Starting polling...")
         await app.updater.start_polling(drop_pending_updates=True)
+        print("📡 Polling started, bot is running!")
         await asyncio.Event().wait()
+    except Exception as e:
+        print(f"❌ Error during polling: {e}")
+        raise
     finally:
+        print("🛑 Stopping bot...")
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
+        print("✅ Bot stopped")
 
 
 if __name__ == "__main__":
