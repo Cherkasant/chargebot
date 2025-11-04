@@ -459,20 +459,20 @@ async def on_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def create_application() -> Application:
-    print("🔧 Loading settings...")
+    print("Loading settings...")
     settings = load_settings()
-    print("✅ Settings loaded successfully")
+    print("Settings loaded successfully")
 
     # Initialize DB (sqlite only) if path points to sqlite
     if settings.db_url.startswith("sqlite///") or settings.db_url.startswith("sqlite:///"):
-        print("🗄️  Initializing database...")
+        print("Initializing database...")
         try:
             init_db(settings.db_url)
-            print("✅ Database initialized successfully")
+            print("Database initialized successfully")
         except Exception as e:
-            print(f"⚠️  Database initialization failed (non-critical): {e}")
+            print(f"Database initialization failed (non-critical): {e}")
 
-    print("🤖 Creating Telegram application...")
+    print("Creating Telegram application...")
     app = (
         Application.builder()
         .token(settings.telegram_token)
@@ -480,56 +480,58 @@ async def create_application() -> Application:
         .build()
     )
     app.bot_data["settings"] = settings
-    print("✅ Telegram application created")
+    print("Telegram application created")
 
-    print("📡 Adding handlers...")
+    print("Adding handlers...")
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("test_minsk", cmd_test_minsk))
     app.add_handler(CommandHandler("add_station", cmd_add_station))
     app.add_handler(MessageHandler(filters.LOCATION, on_location))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
-    print("✅ Handlers added")
+    print("Handlers added")
 
     return app
 
 
 async def run_bot() -> None:
-    print("🚀 Starting bot application...")
+    print("Starting bot application...")
     app = await create_application()
-    print("🔄 Initializing application...")
+    print("Initializing application...")
     await app.initialize()
-    print("▶️  Starting application...")
+    print("Starting application...")
     await app.start()
-    print("✅ Bot started successfully!")
+    print("Bot started successfully!")
 
     # Test connection before full startup
-    print("🔗 Testing Telegram connection...")
+    print("Testing Telegram connection...")
     try:
         # Test bot connection with timeout
         await asyncio.wait_for(app.bot.get_me(), timeout=10.0)
-        print("✅ Telegram connection test passed")
+        print("Telegram connection test passed")
     except asyncio.TimeoutError:
-        print("❌ Telegram connection test timed out")
+        print("Telegram connection test timed out")
         raise Exception("Failed to connect to Telegram API")
     except Exception as e:
-        print(f"❌ Telegram connection test failed: {e}")
+        print(f"Telegram connection test failed: {e}")
         raise
 
     try:
-        print("📡 Starting polling...")
+        print("Starting polling...")
         await app.updater.start_polling(drop_pending_updates=True)
-        print("📡 Polling started, bot is running!")
-        await asyncio.Event().wait()
+        print("Polling started, bot is running!")
+        # Keep the bot running indefinitely
+        while True:
+            await asyncio.sleep(1)
     except Exception as e:
-        print(f"❌ Error during polling: {e}")
+        print(f"Error during polling: {e}")
         raise
     finally:
-        print("🛑 Stopping bot...")
+        print("Stopping bot...")
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
-        print("✅ Bot stopped")
+        print("Bot stopped")
 
 
 if __name__ == "__main__":
